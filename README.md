@@ -1,234 +1,213 @@
-# Real-time Fraud Detection Capstone (Kafka + Spark + ML + Rules)
+# Real-time Fraud Detection for E-wallet Transactions
 
-This project is a demo-ready capstone product for final-year defense. It simulates an e-wallet fraud monitoring platform with real-time data ingestion, stream processing, model inference, rule-based checks, and a live dashboard.
+This project is a local end-to-end demo of real-time fraud detection inspired by e-wallet fraud monitoring patterns.
 
-## 1. Problem Statement
+It combines:
+- Kafka producer for streaming transaction events
+- Spark Structured Streaming for real-time consumption
+- Machine Learning model (Random Forest)
+- Rule-based risk engine
+- Streamlit dashboard for monitoring fraud alerts
 
-E-wallet systems process large transaction volumes continuously. Fraud patterns are mixed:
-- Statistical anomalies that ML can learn
-- Business constraints that rules can enforce immediately
+The system detects:
+- Unusual login behavior
+- Transactions to blacklist accounts
+- Large transactions
+- Rapid repeated transfers
 
-A strong detection platform should combine both in real time:
-- ML catches hidden patterns
-- Rules enforce explicit risk policies
+## 1. Architecture
 
-## 2. Why ML + Rule Engine
-
-Using only ML can miss strict policy violations. Using only rules can miss subtle anomalies.
-
-Fusion strategy used in this project:
-- ml_prediction: output from trained fraud model
-- rule_flag: output from rules (blacklist, large amount, unusual login, rapid transfers)
-- final_flag: 1 if ml_prediction == 1 OR rule_flag == 1
-
-This design is practical for real systems where explainability and recall are both important.
-
-## 3. Architecture (Text Diagram)
-
-```text
-[Synthetic CSV Transactions]
-          |
-          v
-[Kafka Producer] ---> [Kafka Topic: transactions]
-                              |
-                              v
-                   [Spark Structured Streaming]
-                              |
-                              v
-                [Fraud Detector (ML + Rules)]
-                   |                    |
-                   |                    +--> Rule signals:
-                   |                         - blacklist account
-                   |                         - large amount
-                   |                         - rapid repeated transfers
-                   |                         - unusual login
-                   |
-                   +--> ML signal: model prediction
-                              |
-                              v
-                 [Final Decision + Explanations]
-                              |
-                              +--> Console Logs (fraud + normal)
-                              |
-                              +--> JSONL Sink (data/output/fraud_predictions.jsonl)
-                                              |
-                                              v
-                                  [Streamlit Dashboard]
+```mermaid
+flowchart LR
+		A[Synthetic Transaction CSV] --> B[Kafka Producer]
+		B --> C[Kafka Topic: transactions]
+		C --> D[Spark Structured Streaming Consumer]
+		D --> E[Fraud Detector]
+		E --> F[ML Model Prediction]
+		E --> G[Rule Engine]
+		F --> H[Final Fraud Flag]
+		G --> H
+		H --> I[data/output/fraud_predictions.jsonl]
+		I --> J[Streamlit Dashboard]
 ```
 
-## 4. Tech Stack
-
-- Python 3.10+
-- Apache Kafka (local via Docker)
-- Spark Structured Streaming (PySpark)
-- Scikit-learn (Random Forest model)
-- Pandas / NumPy
-- Streamlit dashboard
-
-## 5. Project Structure
+## 2. Project Structure
 
 ```text
 main.py
 requirements.txt
 README.md
-PRESENTATION.md
-DEMO_SCRIPT.md
-
 data/
-  blacklist/blacklist_accounts.csv
-  raw/transactions_synthetic.csv
-  processed/transactions_processed.csv
-  output/fraud_predictions.jsonl
-
+	blacklist/
+		blacklist_accounts.csv
+	raw/
+		transactions_synthetic.csv
+	processed/
+		transactions_processed.csv
+	output/
+		fraud_predictions.jsonl
 docker/
-  docker-compose.yml
-
+	docker-compose.yml
 src/
-  preprocessing/
-    generate_synthetic_data.py
-    preprocess_data.py
-  features/feature_engineering.py
-  model/
-    train_model.py
-    predict_model.py
-    saved_model/fraud_model.pkl
-  rules/rule_engine.py
-  detection/fraud_detector.py
-  producer/kafka_producer.py
-  streaming/spark_streaming_job.py
-  dashboard/app.py
+	preprocessing/
+		generate_synthetic_data.py
+		preprocess_data.py
+	features/
+		feature_engineering.py
+	model/
+		train_model.py
+		predict_model.py
+		saved_model/
+			fraud_model.pkl
+	rules/
+		rule_engine.py
+	detection/
+		fraud_detector.py
+	producer/
+		kafka_producer.py
+	streaming/
+		spark_streaming_job.py
+	dashboard/
+		app.py
 ```
 
-## 6. Setup
+## 3. Setup
 
-### 6.1 Prerequisites
+### 3.1 Prerequisites
+- Python 3.10+
+- Docker Desktop (for Kafka)
+- Java 8+ (required by Spark)
 
-- Python installed
-- Java installed (required by Spark)
-- Docker Desktop running (required by local Kafka)
-
-### 6.2 Install dependencies
+### 3.2 Install dependencies
 
 ```bash
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-### 6.3 Start Kafka
+### 3.3 Start Kafka locally
+
+From project root:
 
 ```bash
 docker compose -f docker/docker-compose.yml up -d
 ```
 
-Check container:
+Check Kafka container status:
 
 ```bash
 docker ps
 ```
 
-## 7. Data and Model Preparation
+## 4. Data + Model Preparation
+
+### Option A: One command via main orchestrator
 
 ```bash
 python main.py prepare-data --rows 2500 --seed 42
 python main.py train-model
 ```
 
-Expected output:
-- Raw data generated in data/raw/transactions_synthetic.csv
-- Processed data generated in data/processed/transactions_processed.csv
-- Model saved to src/model/saved_model/fraud_model.pkl
+### Option B: Run each module directly
 
-## 8. Demo Flow (3 Terminals)
+```bash
+python -m src.preprocessing.generate_synthetic_data --rows 2500 --output data/raw/transactions_synthetic.csv
+python -m src.preprocessing.preprocess_data --input data/raw/transactions_synthetic.csv --output data/processed/transactions_processed.csv
+python -m src.model.train_model --input data/processed/transactions_processed.csv --output src/model/saved_model/fraud_model.pkl
+```
 
-### Terminal 1: Run streaming consumer
+## 5. Run Real-time Pipeline
+
+### 5.1 Start Spark streaming consumer
+
+Terminal 1:
 
 ```bash
 python main.py run-streaming
 ```
 
-Expected output:
-- Spark starts successfully
-- Batch summaries printed periodically
-- Fraud lines shown as:
-  - "FRAUD DETECTED | amount=... | sender=... | receiver=... | reason=..."
-- Normal lines shown as:
-  - "NORMAL TX | amount=... | sender=... | receiver=..."
+### 5.2 Stream transactions into Kafka
 
-### Terminal 2: Run producer
+Terminal 2:
 
 ```bash
 python main.py run-producer --limit 300 --delay 0.2
 ```
 
-Expected output:
-- Producer sends transactions continuously to Kafka
-- Streaming terminal starts printing batch updates almost immediately
+### 5.3 Start dashboard
 
-### Terminal 3: Run dashboard
+Terminal 3:
 
 ```bash
 streamlit run src/dashboard/app.py
 ```
 
-Expected output in browser:
-- Total transactions
-- Fraud count
-- Fraud rate (%)
-- Fraud vs normal chart
-- Recent fraud transactions table (with explanation reasons)
+Open browser at the URL printed by Streamlit (usually http://localhost:8501).
 
-## 9. Real-time Detection Internals
+## 6. Quick Demo Command
 
-For each micro-batch in Spark:
-1. Read raw messages from Kafka topic transactions
-2. Parse JSON with explicit schema in permissive mode
-3. Skip invalid JSON rows safely
-4. Convert valid rows to pandas micro-batch
-5. Run detector:
-   - sanitize missing fields
-   - ML prediction
-   - rule_engine checks
-   - combine to final_flag
-   - attach explanation labels
-6. Print structured logs
-7. Append full scored records to JSONL sink
-
-## 10. Log and Explanation Format
-
-Each flagged transaction includes explanation details:
-- ml_prediction
-- rule_flag
-- fraud_reasons (example: blacklist_account|large_amount|ml_high_risk)
-
-This makes the system easy to explain in front of evaluators.
-
-## 11. Quick One-command Demo
+This command starts streaming consumer as a subprocess, streams sample transactions, then stops the consumer.
 
 ```bash
 python main.py run-demo --limit 250 --delay 0.2
 ```
 
-This command starts streaming, runs producer, waits for processing, then stops consumer.
+## 7. Expected Output
 
-## 12. Troubleshooting
+### Console from Spark streaming
+For each micro-batch, you should see rows including:
+- event_time
+- nameOrig / nameDest
+- type
+- amount
+- ml_prediction
+- rule_flag
+- final_flag
 
-- If producer shows NoBrokersAvailable:
-  - Ensure Docker Desktop is running
-  - Ensure Kafka container is up
-- If Spark fails to start:
-  - Verify Java installation
-- If dashboard has no data:
-  - Confirm streaming is running and output file is growing
+Example:
 
-## 13. Stop Services
+```text
+=== BATCH 3 ===
+				 event_time nameOrig    nameDest     type   amount  ml_prediction  rule_flag  final_flag
+2025-01-01 09:12:10  C100021 M1979787155 TRANSFER 450000.0              1          1           1
+2025-01-01 09:12:24  C100344   M20011321  PAYMENT   3200.0              0          0           0
+```
+
+### Output file for dashboard
+- File: data/output/fraud_predictions.jsonl
+- Contains all scored events with ML and rule flags.
+
+### Dashboard
+- Total transactions
+- Fraud transactions
+- Fraud rate
+- Fraud breakdown by type
+- Latest fraud events table
+
+## 8. Rule + ML Fusion Logic
+
+In fraud detection:
+- ml_prediction = model.predict(features)
+- rule_flag = OR of rules (blacklist, large amount high-risk type, unusual login, rapid transfers)
+- final_flag = OR(ml_prediction, rule_flag)
+
+Mathematically:
+
+$$
+	ext{final\_flag} = \mathbb{1}(\text{ml\_prediction}=1 \lor \text{rule\_flag}=1)
+$$
+
+## 9. Stop Services
+
+Stop Kafka:
 
 ```bash
 docker compose -f docker/docker-compose.yml down
 ```
 
-## 14. Suggested Evaluation Highlights
+## 10. Optional Extensions
 
-- Real-time stream architecture, not batch-only analysis
-- Hybrid detection strategy (ML + Rule) with explainability
-- Robustness features: invalid JSON handling, batch-level exception handling
-- End-to-end visual monitoring via Streamlit
+- Persist scored records to PostgreSQL
+- Add model retraining schedule
+- Add alert channels (email/webhook)
+- Add drift monitoring for transaction patterns
