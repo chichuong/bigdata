@@ -1,0 +1,50 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage/
+dist/
+build/
+*.egg-info/
+
+# ---- Virtual environments ----
+venv/
+.venv/
+ENV/
+env/
+
+# ---- IDE / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- Secrets ----
+.env
+.env.*
+*.pem
+*.key
+
+# ---- Data (BigData) ----
+# Usually raw/processed data should not be committed.
+/data/raw/
+/data/processed/
+
+# ---- ML artifacts ----
+*.pkl
+*.joblib
+*.onnx
+*.h5
+/src/model/saved_model/
+
+# ---- Spark / Streaming ----
+checkpoint/
+checkpoints/
+*.parquet
+*.orc
+*.delta
+logs/
